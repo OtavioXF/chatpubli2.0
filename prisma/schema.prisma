@@ -1,0 +1,100 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoomType {
+  PUBLIC
+  GROUP
+}
+
+enum MessageType {
+  TEXT
+  IMAGE
+  VIDEO
+  FILE
+  MIXED
+}
+
+model Session {
+  id            String    @id @default(cuid())
+  displayName   String
+  rememberName  Boolean   @default(false)
+  isHiddenAdmin Boolean   @default(false)
+  maskedName    String?
+  sessionToken  String    @unique
+  createdAt     DateTime  @default(now())
+  lastSeenAt    DateTime  @updatedAt
+  messages      Message[]
+  rooms         Room[]    @relation("RoomCreator")
+  locks         ChatLock[]
+  logs          AdminLog[]
+}
+
+model Room {
+  id                 String      @id @default(cuid())
+  type               RoomType
+  name               String
+  slug               String      @unique
+  passwordHash       String?
+  createdBySessionId String
+  createdAt          DateTime    @default(now())
+  isActive           Boolean     @default(true)
+  messages           Message[]
+  locks              ChatLock[]
+  creator            Session     @relation("RoomCreator", fields: [createdBySessionId], references: [id])
+}
+
+model Message {
+  id          String       @id @default(cuid())
+  roomId      String
+  sessionId   String
+  visibleName String
+  content     String?
+  messageType MessageType  @default(TEXT)
+  createdAt   DateTime     @default(now())
+  deletedAt   DateTime?
+  isDeleted   Boolean      @default(false)
+  room        Room         @relation(fields: [roomId], references: [id])
+  session     Session      @relation(fields: [sessionId], references: [id])
+  attachments Attachment[]
+}
+
+model Attachment {
+  id           String   @id @default(cuid())
+  messageId    String
+  fileName     String
+  mimeType     String
+  fileSize     Int
+  url          String
+  thumbnailUrl String?
+  createdAt    DateTime @default(now())
+  message      Message  @relation(fields: [messageId], references: [id])
+}
+
+model ChatLock {
+  id                String   @id @default(cuid())
+  roomId            String
+  lockedBySessionId String
+  startsAt          DateTime @default(now())
+  endsAt            DateTime
+  reason            String?
+  isActive          Boolean  @default(true)
+  room              Room     @relation(fields: [roomId], references: [id])
+  locker            Session  @relation(fields: [lockedBySessionId], references: [id])
+}
+
+model AdminLog {
+  id              String   @id @default(cuid())
+  adminSessionId  String
+  actionType      String
+  targetMessageId String?
+  targetRoomId    String?
+  metadataJson    String?
+  createdAt       DateTime @default(now())
+  admin           Session   @relation(fields: [adminSessionId], references: [id])
+}
