@@ -25,14 +25,48 @@ export default function HomePage() {
   const [groupName, setGroupName] = useState('');
   const [groupPassword, setGroupPassword] = useState('');
 
+  useEffect(() => {
+    const savedName = window.localStorage.getItem('chatpublico_name');
+    if (savedName) {
+      setDisplayName(savedName);
+      setRememberName(true);
+    }
+  }, []);
+
   async function startSession() {
+    const trimmedName = displayName.trim();
+    if (!trimmedName) return;
+
     const res = await fetch('/api/session/start', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ displayName, rememberName })
+      body: JSON.stringify({ displayName: trimmedName, rememberName })
     });
+
     const data = await res.json();
-    if (data.session) setSession(data.session);
+
+    if (data.session) {
+      setSession(data.session);
+
+      if (rememberName) {
+        window.localStorage.setItem('chatpublico_name', trimmedName);
+      } else {
+        window.localStorage.removeItem('chatpublico_name');
+      }
+    }
+  }
+
+  function changeName() {
+    setSession(null);
+    setDisplayName('');
+    setRememberName(false);
+  }
+
+  function forgetRememberedName() {
+    window.localStorage.removeItem('chatpublico_name');
+    setDisplayName('');
+    setRememberName(false);
+    setSession(null);
   }
 
   async function loadPublicMessages() {
@@ -55,11 +89,19 @@ export default function HomePage() {
 
   useEffect(() => {
     socket = io();
-    socket.onAny((event, payload) => {
-      if (event.includes('chatpublico') || event.includes('message') || event.includes('locked') || event.includes('unlocked') || event.includes('cleared')) {
+
+    socket.onAny((event) => {
+      if (
+        event.includes('chatpublico') ||
+        event.includes('message') ||
+        event.includes('locked') ||
+        event.includes('unlocked') ||
+        event.includes('cleared')
+      ) {
         loadPublicMessages();
       }
     });
+
     return () => {
       socket?.disconnect();
       socket = null;
@@ -70,7 +112,12 @@ export default function HomePage() {
     const form = new FormData();
     form.append('content', payload.content);
     if (payload.file) form.append('file', payload.file);
-    await fetch('/api/public/messages', { method: 'POST', body: form });
+
+    await fetch('/api/public/messages', {
+      method: 'POST',
+      body: form
+    });
+
     await loadPublicMessages();
   }
 
@@ -80,11 +127,15 @@ export default function HomePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ id })
     });
+
     await loadPublicMessages();
   }
 
   async function clearRoom() {
-    await fetch('/api/admin/clear-room', { method: 'POST' });
+    await fetch('/api/admin/clear-room', {
+      method: 'POST'
+    });
+
     await loadPublicMessages();
   }
 
@@ -94,6 +145,7 @@ export default function HomePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ minutes })
     });
+
     await loadPublicMessages();
   }
 
@@ -103,6 +155,7 @@ export default function HomePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'unlock' })
     });
+
     await loadPublicMessages();
   }
 
@@ -112,6 +165,7 @@ export default function HomePage() {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: groupName, password: groupPassword })
     });
+
     setGroupName('');
     setGroupPassword('');
     await loadGroups();
@@ -120,84 +174,208 @@ export default function HomePage() {
   const sortedMessages = useMemo(() => messages, [messages]);
 
   return (
-    <main className="mx-auto min-h-screen max-w-6xl px-4 py-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-3xl font-bold tracking-tight">Chatpublico / Grupos</h1>
-        <div className="flex gap-2 rounded-2xl border border-zinc-800 bg-zinc-900 p-1">
-          <button onClick={() => setTab('publico')} className={`rounded-xl px-4 py-2 ${tab === 'publico' ? 'bg-sky-500 text-black' : 'text-zinc-300'}`}>Chatpublico</button>
-          <button onClick={() => setTab('grupos')} className={`rounded-xl px-4 py-2 ${tab === 'grupos' ? 'bg-sky-500 text-black' : 'text-zinc-300'}`}>Grupos</button>
-        </div>
-      </div>
+    <main className="mx-auto max-w-6xl px-4 py-8">
+      <div className="rounded-3xl border border-zinc-800 bg-zinc-900 p-6 shadow-2xl shadow-black/30">
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Chatpublico / Grupos</h1>
+            <p className="mt-2 text-sm text-zinc-400">
+              Chat público anônimo e salas privadas com senha.
+            </p>
+          </div>
 
-      {!session ? (
-        <section className="mb-6 rounded-3xl border border-zinc-800 bg-zinc-900 p-6">
-          <h2 className="text-xl font-semibold">Entrar anonimamente</h2>
-          <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto]">
-            <div>
-              <input value={displayName} onChange={(e) => setDisplayName(e.target.value)} placeholder="Escolha um nome" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3" />
-              <label className="mt-3 flex items-center gap-2 text-sm text-zinc-300">
-                <input type="checkbox" checked={rememberName} onChange={(e) => setRememberName(e.target.checked)} />
+          <div className="flex gap-2 rounded-2xl border border-zinc-800 bg-zinc-950 p-1">
+            <button
+              onClick={() => setTab('publico')}
+              className={`rounded-xl px-4 py-2 ${
+                tab === 'publico' ? 'bg-sky-500 text-black' : 'text-zinc-300'
+              }`}
+            >
+              Chatpublico
+            </button>
+            <button
+              onClick={() => setTab('grupos')}
+              className={`rounded-xl px-4 py-2 ${
+                tab === 'grupos' ? 'bg-sky-500 text-black' : 'text-zinc-300'
+              }`}
+            >
+              Grupos
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+          <h2 className="text-xl font-semibold">Sua sessão</h2>
+
+          {!session ? (
+            <div className="mt-4 space-y-4">
+              <input
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+                placeholder="Escolha um nome"
+                className="w-full rounded-xl border border-zinc-800 bg-zinc-900 p-3"
+              />
+
+              <label className="flex items-center gap-2 text-sm text-zinc-300">
+                <input
+                  type="checkbox"
+                  checked={rememberName}
+                  onChange={(e) => setRememberName(e.target.checked)}
+                />
                 Lembrar nome
               </label>
-            </div>
-            <button onClick={startSession} className="rounded-2xl bg-sky-500 px-5 py-3 font-semibold text-black hover:bg-sky-400">Entrar</button>
-          </div>
-          <p className="mt-3 text-sm text-zinc-400">Quem usar o nome secreto definido no backend entra com moderação oculta, sem aparecer como admin para o resto do chat.</p>
-        </section>
-      ) : null}
 
-      {tab === 'publico' ? (
-        <section className="grid gap-6 lg:grid-cols-[1fr_320px]">
-          <div className="space-y-6">
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-              <div>
-                <div className="text-lg font-semibold">Chat público anônimo</div>
-                <div className="text-sm text-zinc-400">Todos veem as mensagens em tempo real.</div>
-              </div>
-              <div className="flex gap-2">
-                <button onClick={() => setOrder('desc')} className={`rounded-xl px-4 py-2 ${order === 'desc' ? 'bg-zinc-100 text-black' : 'bg-zinc-800'}`}>Recentes primeiro</button>
-                <button onClick={() => setOrder('asc')} className={`rounded-xl px-4 py-2 ${order === 'asc' ? 'bg-zinc-100 text-black' : 'bg-zinc-800'}`}>Recentes no final</button>
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={startSession}
+                  className="rounded-xl bg-sky-500 px-4 py-3 font-semibold text-black"
+                >
+                  Entrar
+                </button>
+
+                <button
+                  onClick={forgetRememberedName}
+                  className="rounded-xl border border-zinc-700 px-4 py-3 text-sm text-zinc-200"
+                >
+                  Limpar nome salvo
+                </button>
               </div>
             </div>
-
-            {locked ? <div className="rounded-2xl border border-yellow-600/40 bg-yellow-950/30 p-4 text-yellow-200">Chat bloqueado temporariamente.</div> : null}
-            <MessageList messages={sortedMessages} isAdmin={Boolean(session?.isHiddenAdmin)} onDelete={deleteMessage} />
-            <Composer onSend={sendPublicMessage} disabled={!session || locked} />
-          </div>
-
-          <aside className="space-y-6">
-            <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-              <h3 className="text-lg font-semibold">Sua sessão</h3>
-              <p className="mt-2 text-sm text-zinc-300">Nome: {session?.displayName || 'não iniciado'}</p>
-              <p className="mt-1 text-sm text-zinc-400">Status: {session?.isHiddenAdmin ? 'moderador oculto' : 'usuário comum'}</p>
-            </div>
-            {session?.isHiddenAdmin ? <AdminPanel onClear={clearRoom} onLock={lockRoom} onUnlock={unlockRoom} /> : null}
-          </aside>
-        </section>
-      ) : (
-        <section className="grid gap-6 lg:grid-cols-[360px_1fr]">
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-            <h2 className="text-xl font-semibold">Criar grupo</h2>
+          ) : (
             <div className="mt-4 space-y-3">
-              <input value={groupName} onChange={(e) => setGroupName(e.target.value)} placeholder="Nome do grupo" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3" />
-              <input value={groupPassword} onChange={(e) => setGroupPassword(e.target.value)} placeholder="Senha do grupo" className="w-full rounded-xl border border-zinc-800 bg-zinc-950 p-3" />
-              <button onClick={createGroup} disabled={!session} className="w-full rounded-xl bg-sky-500 px-4 py-3 font-semibold text-black hover:bg-sky-400 disabled:opacity-50">Criar grupo</button>
-            </div>
-          </div>
+              <p className="text-sm text-zinc-300">
+                Nome atual: <span className="font-semibold text-white">{session.displayName}</span>
+              </p>
 
-          <div className="rounded-2xl border border-zinc-800 bg-zinc-900 p-4">
-            <h2 className="text-xl font-semibold">Grupos existentes</h2>
-            <div className="mt-4 grid gap-3 md:grid-cols-2">
-              {groups.map((group) => (
-                <a key={group.id} href={`/group/${group.id}`} className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4 hover:border-sky-400">
-                  <div className="font-semibold">{group.name}</div>
-                  <div className="mt-1 text-sm text-zinc-400">Sala privada com senha</div>
-                </a>
-              ))}
+              <p className="text-sm text-zinc-300">
+                Status:{' '}
+                <span className="font-semibold text-white">
+                  {session.isHiddenAdmin ? 'moderador oculto' : 'usuário comum'}
+                </span>
+              </p>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={changeName}
+                  className="rounded-xl border border-zinc-700 px-4 py-3 text-sm text-zinc-200"
+                >
+                  Trocar nome
+                </button>
+
+                <button
+                  onClick={forgetRememberedName}
+                  className="rounded-xl border border-red-700 px-4 py-3 text-sm text-red-200"
+                >
+                  Esquecer nome salvo
+                </button>
+              </div>
             </div>
-          </div>
-        </section>
-      )}
+          )}
+        </div>
+
+        {tab === 'publico' ? (
+          <section className="mt-6">
+            <div className="flex flex-col gap-4 rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Chat público anônimo</h2>
+                  <p className="text-sm text-zinc-400">
+                    Todos veem as mensagens em tempo real.
+                  </p>
+                </div>
+
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setOrder('desc')}
+                    className={`rounded-xl px-4 py-2 ${
+                      order === 'desc' ? 'bg-zinc-100 text-black' : 'bg-zinc-800'
+                    }`}
+                  >
+                    Recentes primeiro
+                  </button>
+                  <button
+                    onClick={() => setOrder('asc')}
+                    className={`rounded-xl px-4 py-2 ${
+                      order === 'asc' ? 'bg-zinc-100 text-black' : 'bg-zinc-800'
+                    }`}
+                  >
+                    Recentes no final
+                  </button>
+                </div>
+              </div>
+
+              {locked ? (
+                <div className="rounded-xl border border-yellow-600/40 bg-yellow-950/30 p-4">
+                  Chat bloqueado temporariamente.
+                </div>
+              ) : null}
+
+              <MessageList messages={sortedMessages} />
+              <Composer onSend={sendPublicMessage} disabled={locked || !session} />
+
+              {session?.isHiddenAdmin ? (
+                <AdminPanel
+                  messages={sortedMessages}
+                  onDeleteMessage={deleteMessage}
+                  onClearRoom={clearRoom}
+                  onLockRoom={lockRoom}
+                  onUnlockRoom={unlockRoom}
+                />
+              ) : null}
+            </div>
+          </section>
+        ) : (
+          <section className="mt-6 grid gap-6 lg:grid-cols-[360px_1fr]">
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+              <h2 className="text-2xl font-bold">Criar grupo</h2>
+
+              <div className="mt-4 space-y-3">
+                <input
+                  value={groupName}
+                  onChange={(e) => setGroupName(e.target.value)}
+                  placeholder="Nome do grupo"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 p-3"
+                />
+                <input
+                  value={groupPassword}
+                  onChange={(e) => setGroupPassword(e.target.value)}
+                  placeholder="Senha do grupo"
+                  className="w-full rounded-xl border border-zinc-800 bg-zinc-900 p-3"
+                />
+                <button
+                  onClick={createGroup}
+                  className="w-full rounded-xl bg-sky-500 px-4 py-3 font-semibold text-black"
+                >
+                  Criar grupo
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-zinc-800 bg-zinc-950 p-4">
+              <h2 className="text-2xl font-bold">Grupos existentes</h2>
+
+              <div className="mt-4 space-y-3">
+                {groups.map((group) => (
+                  <a
+                    key={group.id}
+                    href={`/group/${group.id}`}
+                    className="block rounded-2xl border border-zinc-800 bg-zinc-900 p-4 transition hover:border-sky-500"
+                  >
+                    <div className="font-semibold">{group.name}</div>
+                    <div className="mt-1 text-sm text-zinc-400">Sala privada com senha</div>
+                  </a>
+                ))}
+
+                {!groups.length ? (
+                  <div className="rounded-2xl border border-dashed border-zinc-800 p-6 text-sm text-zinc-500">
+                    Nenhum grupo criado ainda.
+                  </div>
+                ) : null}
+              </div>
+            </div>
+          </section>
+        )}
+      </div>
     </main>
   );
 }
