@@ -240,6 +240,11 @@ export default function HomePage() {
                   Limpar nome salvo
                 </button>
               </div>
+
+              <p className="text-sm text-zinc-400">
+                Quem usar o nome secreto definido no backend entra com moderação oculta,
+                sem aparecer como admin para o resto do chat.
+              </p>
             </div>
           ) : (
             <div className="mt-4 space-y-3">
@@ -288,7 +293,7 @@ export default function HomePage() {
                   <button
                     onClick={() => setOrder('desc')}
                     className={`rounded-xl px-4 py-2 ${
-                      order === 'desc' ? 'bg-zinc-100 text-black' : 'bg-zinc-800'
+                      order === 'desc' ? 'bg-zinc-100 text-black' : 'bg-zinc-800 text-white'
                     }`}
                   >
                     Recentes primeiro
@@ -296,7 +301,7 @@ export default function HomePage() {
                   <button
                     onClick={() => setOrder('asc')}
                     className={`rounded-xl px-4 py-2 ${
-                      order === 'asc' ? 'bg-zinc-100 text-black' : 'bg-zinc-800'
+                      order === 'asc' ? 'bg-zinc-100 text-black' : 'bg-zinc-800 text-white'
                     }`}
                   >
                     Recentes no final
