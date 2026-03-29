@@ -5,26 +5,51 @@ import { getSessionFromRequest } from '@/lib/auth';
 import { getIO } from '@/lib/socket';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  if (req.method !== 'POST') return res.status(405).end();
+  if (req.method !== 'POST') {
+    return res.status(405).end();
+  }
+
   const session = await getSessionFromRequest(req);
-  if (!session?.isHiddenAdmin) return res.status(403).json({ error: 'Acesso negado.' });
+
+  if (!session?.isHiddenAdmin) {
+    return res.status(403).json({ error: 'Acesso negado.' });
+  }
+
   const { roomId } = req.body as { roomId?: string };
-  const room = roomId ? await prisma.room.findUnique({ where: { id: roomId } }) : await getPublicRoom();
-  if (!room) return res.status(404).json({ error: 'Sala não encontrada.' });
 
-  await prisma.message.updateMany({
-    where: { roomId: room.id },
-    data: { isDeleted: true, deletedAt: new Date(), content: null }
-  });
+  const room = roomId
+    ? await prisma.room.findUnique({ where: { id: roomId } })
+    : await getPublicRoom();
 
-  await prisma.adminLog.create({
-    data: {
-      adminSessionId: session.id,
-      actionType: 'clear_room',
-      targetRoomId: room.id
-    }
+  if (!room) {
+    return res.status(404).json({ error: 'Sala não encontrada.' });
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.attachment.deleteMany({
+      where: {
+        message: {
+          roomId: room.id
+        }
+      }
+    });
+
+    await tx.message.deleteMany({
+      where: {
+        roomId: room.id
+      }
+    });
+
+    await tx.adminLog.create({
+      data: {
+        adminSessionId: session.id,
+        actionType: 'clear_room_hard_delete',
+        targetRoomId: room.id
+      }
+    });
   });
 
   getIO()?.emit(`room:${room.id}:cleared`, { roomId: room.id });
+
   return res.status(200).json({ ok: true });
 }
